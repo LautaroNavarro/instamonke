@@ -1,0 +1,32 @@
+name: PROD Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  proddeploy:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git Clone Repository
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+          cache: 'npm'
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.PROD_FE_CD_KEY }}
+          aws-secret-access-key: ${{ secrets.PROD_FE_CD_SECRET_KEY }}
+          aws-region: us-east-1
+      - name: Install dependencies
+        run: npm ci -f
+      - name: Generate build
+        run: NODE_OPTIONS="--max_old_space_size=4096" npm run build
+      - name: Upload static assets to S3
+        run: aws s3 sync dist/ s3://${{ secrets.PROD_BUCKET_NAME }}
+      - name: Create cloudfront cache invalidation
+        run: aws cloudfront create-invalidation --distribution-id ${{ secrets.PROD_DISTRIBUTION_ID }} --paths "/*"
